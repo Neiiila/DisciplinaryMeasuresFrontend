@@ -2,16 +2,12 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { LoginPage } from '@/features/auth/pages/LoginPage'
 import { RegisterPage } from '@/features/auth/pages/RegisterPage'
 import { DashboardPage } from '@/features/dashboard/pages/DashboardPage'
-import { EmployeeFormPage } from '@/features/employees/pages/EmployeeFormPage'
-import { EmployeeListPage } from '@/features/employees/pages/EmployeeListPage'
-import { MeetingListPage } from '@/features/meetings/pages/MeetingListPage'
-import { AddSanctionRequestPage } from '@/features/sanctions/pages/AddSanctionRequestPage'
+import { EmployeeDirectoryPage } from '@/features/employees/pages/EmployeeDirectoryPage'
+import { AddressedToMePage } from '@/features/sanctions/pages/AddressedToMePage'
 import { MyRequestsPage } from '@/features/sanctions/pages/MyRequestsPage'
-import { ReceivedRequestsPage } from '@/features/sanctions/pages/ReceivedRequestsPage'
+import { RaiseSanctionRequestPage } from '@/features/sanctions/pages/RaiseSanctionRequestPage'
 import { SanctionListPage } from '@/features/sanctions/pages/SanctionListPage'
-import { HrDecisionWizardPage } from '@/features/sanctions/wizard/HrDecisionWizardPage'
-import { AttachAccountPage } from '@/features/users/pages/AttachAccountPage'
-import { UpdateAccountPage } from '@/features/users/pages/UpdateAccountPage'
+import { UserFormPage } from '@/features/users/pages/UserFormPage'
 import { UserListPage } from '@/features/users/pages/UserListPage'
 import { ROLES } from '@/shared/config/roles'
 import { GuestOnlyRoute } from '@/shared/ui/GuestOnlyRoute'
@@ -20,13 +16,19 @@ import { AccessDeniedPage } from '@/shared/ui/pages/AccessDeniedPage'
 import { NotFoundPage } from '@/shared/ui/pages/NotFoundPage'
 import { ProtectedRoute } from '@/shared/ui/ProtectedRoute'
 
-const MANAGEMENT_ROLES = [ROLES.ADMIN, ROLES.SUPER_ADMIN]
-const REQUESTER_ROLES = [ROLES.ADMIN, ROLES.CHIEF, ROLES.SUPER_ADMIN]
+const ADMIN_ONLY = [ROLES.ADMINISTRATOR]
 
+/**
+ * Route-level authorisation mirrors the backend's own: `[Authorize]`
+ * everywhere inside /dashboard, plus the Administrator policy on the routes
+ * whose endpoints carry it. The guard is a convenience, not the enforcement
+ * point — the API rejects the call regardless.
+ */
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
       <Route
         path="/login"
         element={
@@ -35,7 +37,14 @@ export function AppRoutes() {
           </GuestOnlyRoute>
         }
       />
-      <Route path="/register" element={<RegisterPage />} />
+      <Route
+        path="/register"
+        element={
+          <GuestOnlyRoute>
+            <RegisterPage />
+          </GuestOnlyRoute>
+        }
+      />
       <Route path="/unauthorized" element={<AccessDeniedPage />} />
 
       <Route
@@ -47,11 +56,24 @@ export function AppRoutes() {
         }
       >
         <Route index element={<DashboardPage />} />
+        <Route path="employees" element={<EmployeeDirectoryPage />} />
+
+        <Route path="sanctions/mine" element={<MyRequestsPage />} />
+        <Route path="sanctions/addressed-to-me" element={<AddressedToMePage />} />
+        <Route path="sanctions/new" element={<RaiseSanctionRequestPage />} />
+        <Route
+          path="sanctions"
+          element={
+            <ProtectedRoute allowedRoles={ADMIN_ONLY}>
+              <SanctionListPage />
+            </ProtectedRoute>
+          }
+        />
 
         <Route
           path="users"
           element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
+            <ProtectedRoute allowedRoles={ADMIN_ONLY}>
               <UserListPage />
             </ProtectedRoute>
           }
@@ -59,91 +81,16 @@ export function AppRoutes() {
         <Route
           path="users/new"
           element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
-              <AttachAccountPage />
+            <ProtectedRoute allowedRoles={ADMIN_ONLY}>
+              <UserFormPage />
             </ProtectedRoute>
           }
         />
         <Route
           path="users/:id/edit"
           element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
-              <UpdateAccountPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="employees"
-          element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
-              <EmployeeListPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="employees/new"
-          element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
-              <EmployeeFormPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="employees/:id/edit"
-          element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
-              <EmployeeFormPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="sanctions"
-          element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
-              <SanctionListPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="sanctions/new"
-          element={
-            <ProtectedRoute allowedRoles={REQUESTER_ROLES}>
-              <AddSanctionRequestPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="sanctions/mine"
-          element={
-            <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.CHIEF]}>
-              <MyRequestsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="sanctions/received"
-          element={
-            <ProtectedRoute allowedRoles={REQUESTER_ROLES}>
-              <ReceivedRequestsPage />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="sanctions/decision/:id"
-          element={
-            <ProtectedRoute allowedRoles={[ROLES.SUPER_ADMIN]}>
-              <HrDecisionWizardPage />
-            </ProtectedRoute>
-          }
-        />
-
-        <Route
-          path="meetings"
-          element={
-            <ProtectedRoute allowedRoles={MANAGEMENT_ROLES}>
-              <MeetingListPage />
+            <ProtectedRoute allowedRoles={ADMIN_ONLY}>
+              <UserFormPage />
             </ProtectedRoute>
           }
         />

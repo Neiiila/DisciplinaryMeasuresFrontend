@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "disciplinary-measures-frontend",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "C:\\Users\\naila.bouadil\\AppData\\Roaming\\nvm\\v24.11.1\\npm.cmd",
       "runtimeArgs": ["run", "dev"],
       "port": 5173
     }

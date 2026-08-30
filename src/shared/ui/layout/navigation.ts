@@ -4,53 +4,20 @@ export interface NavItem {
   label: string
   to: string
   icon: string
+  /** Omitted means every authenticated role may see it. */
   roles?: Role[]
 }
 
+const ADMIN_ONLY = [ROLES.ADMINISTRATOR]
+
 export const NAV_ITEMS: NavItem[] = [
   { label: 'Home', to: '/dashboard', icon: 'pi pi-home' },
-  {
-    label: 'Users',
-    to: '/dashboard/users',
-    icon: 'pi pi-users',
-    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
-  },
-  {
-    label: 'Employees',
-    to: '/dashboard/employees',
-    icon: 'pi pi-id-card',
-    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
-  },
-  {
-    label: 'Sanction requests',
-    to: '/dashboard/sanctions',
-    icon: 'pi pi-shield',
-    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
-  },
-  {
-    label: 'New sanction request',
-    to: '/dashboard/sanctions/new',
-    icon: 'pi pi-plus-circle',
-    roles: [ROLES.ADMIN, ROLES.CHIEF, ROLES.SUPER_ADMIN],
-  },
-  {
-    label: 'My requests',
-    to: '/dashboard/sanctions/mine',
-    icon: 'pi pi-send',
-    roles: [ROLES.ADMIN, ROLES.CHIEF],
-  },
-  {
-    label: 'Received requests',
-    to: '/dashboard/sanctions/received',
-    icon: 'pi pi-inbox',
-    roles: [ROLES.ADMIN, ROLES.CHIEF, ROLES.SUPER_ADMIN],
-  },
-  {
-    label: 'Meetings',
-    to: '/dashboard/meetings',
-    icon: 'pi pi-calendar',
-    roles: [ROLES.ADMIN, ROLES.SUPER_ADMIN],
-  },
+  { label: 'My requests', to: '/dashboard/sanctions/mine', icon: 'pi pi-send' },
+  { label: 'Addressed to me', to: '/dashboard/sanctions/addressed-to-me', icon: 'pi pi-inbox' },
+  { label: 'Raise a request', to: '/dashboard/sanctions/new', icon: 'pi pi-plus-circle' },
+  { label: 'Directory', to: '/dashboard/employees', icon: 'pi pi-id-card' },
+  { label: 'All requests', to: '/dashboard/sanctions', icon: 'pi pi-shield', roles: ADMIN_ONLY },
+  { label: 'Users', to: '/dashboard/users', icon: 'pi pi-users', roles: ADMIN_ONLY },
 ]
 
 export function visibleNavItems(role: Role): NavItem[] {
