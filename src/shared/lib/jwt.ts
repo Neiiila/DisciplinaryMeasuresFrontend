@@ -1,37 +1,50 @@
 import { jwtDecode } from 'jwt-decode'
-import type { Role } from '@/shared/config/roles'
+import { isRole, type Role } from '@/shared/config/roles'
 
-// The backend issues standard WS-Federation style claim URIs instead of the
-// short `role`/`sub` names, so decoding is centralized here rather than
-// repeated (and re-decoded on every call, as the legacy app did) elsewhere.
-const CLAIM_ROLE = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
+/**
+ * The API signs tokens with .NET's `ClaimTypes` constants, which expand to
+ * these WS-Federation claim URIs. Decoding lives here so the shape of the
+ * token is asserted in exactly one place.
+ *
+ * Note there is no `photo` or business-unit claim: the backend deliberately
+ * dropped both from the token (they are display data that inflated every
+ * request header), so the UI reads the photo from the login response and
+ * from `GET /api/users/{id}` instead.
+ */
 const CLAIM_USER_ID = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier'
+const CLAIM_NAME = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name'
+const CLAIM_ROLE = 'http://schemas.microsoft.com/ws/2008/06/identity/claims/role'
 
 interface RawTokenClaims {
-  [CLAIM_ROLE]?: string
   [CLAIM_USER_ID]?: string
-  photo?: string
-  BU?: string
+  [CLAIM_NAME]?: string
+  [CLAIM_ROLE]?: string
+  sub?: string
+  email?: string
   exp?: number
 }
 
 export interface AuthenticatedUser {
   userId: string
+  displayName: string
   role: Role
-  businessUnit: string | null
-  photo: string | null
+  email: string | null
 }
 
 export function decodeToken(token: string): AuthenticatedUser | null {
   try {
     const claims = jwtDecode<RawTokenClaims>(token)
-    if (!claims[CLAIM_USER_ID] || !claims[CLAIM_ROLE]) return null
+
+    const userId = claims[CLAIM_USER_ID] ?? claims.sub
+    const role = claims[CLAIM_ROLE]
+
+    if (!userId || !role || !isRole(role)) return null
 
     return {
-      userId: claims[CLAIM_USER_ID],
-      role: claims[CLAIM_ROLE] as Role,
-      businessUnit: claims.BU ?? null,
-      photo: claims.photo ?? null,
+      userId,
+      displayName: claims[CLAIM_NAME] ?? userId,
+      role,
+      email: claims.email ?? null,
     }
   } catch {
     return null

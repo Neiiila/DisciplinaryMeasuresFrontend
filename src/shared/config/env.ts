@@ -1,22 +1,25 @@
 /**
- * Central place for every environment-driven value the app needs.
+ * Every environment-driven value the app needs, read once.
  *
- * The legacy Angular app hardcoded `https://localhost:7155` inside every
- * single service file, plus a scattering of company-specific literals
- * ("TE Connectivity", the "te" id prefix, the "@te.com" email domain).
- * Reading everything through this one module means a deployment only ever
- * needs to change `.env`, never application code.
+ * The legacy Angular client hardcoded its API host in each of its fifteen
+ * services, plus company-specific literals in component templates. Routing
+ * all of that through this module means a deployment changes `.env`, never
+ * application code.
  */
 export const env = {
-  apiBaseUrl: normalizeBaseUrl(import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7155'),
-  whatsappServiceUrl: normalizeBaseUrl(
-    import.meta.env.VITE_WHATSAPP_SERVICE_URL ?? 'http://localhost:3000',
-  ),
-  companyName: import.meta.env.VITE_COMPANY_NAME ?? 'Your Company',
+  apiBaseUrl: stripTrailingSlash(import.meta.env.VITE_API_BASE_URL ?? 'https://localhost:7113'),
+  companyName: import.meta.env.VITE_COMPANY_NAME || 'Your Company',
   employeeIdPrefix: import.meta.env.VITE_EMPLOYEE_ID_PREFIX ?? '',
   companyEmailDomain: import.meta.env.VITE_COMPANY_EMAIL_DOMAIN ?? '',
 } as const
 
-function normalizeBaseUrl(url: string): string {
+function stripTrailingSlash(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url
+}
+
+/** Resolves a server-relative stored file path (photo, attachment) to an absolute URL. */
+export function toAbsoluteUrl(path: string | null | undefined): string | null {
+  if (!path) return null
+  if (/^https?:\/\//i.test(path)) return path
+  return `${env.apiBaseUrl}/${path.replace(/^\//, '')}`
 }
