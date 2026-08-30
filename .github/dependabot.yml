@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR per ecosystem area rather than one per package, so routine
+      # patch bumps do not bury real updates.
+      react:
+        patterns: ['react', 'react-dom', '@types/react', '@types/react-dom']
+      tooling:
+        patterns: ['vite', 'vitest', '@vitejs/*', 'typescript', 'oxlint', '@vitest/*']
+      testing:
+        patterns: ['@testing-library/*', 'msw', 'jsdom']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
