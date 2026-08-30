@@ -3,14 +3,13 @@ import { env } from '@/shared/config/env'
 import { tokenStorage } from '@/shared/lib/tokenStorage'
 
 /**
- * One configured axios instance for the whole app.
+ * One configured Axios instance for the whole app.
  *
- * The legacy Angular services never attached an `Authorization` header at
- * all (each one just built its own `HttpClient` call against a hardcoded
- * URL), so protected endpoints depended on the backend accepting the token
- * through some other channel. Here the header is attached centrally, and a
- * 401 response clears the stale token and bounces the user back to login
- * instead of leaving them stuck on a broken screen.
+ * Every `api/*` route on the backend except the two authentication endpoints
+ * carries `[Authorize]`, so the bearer token is attached centrally here. The
+ * legacy Angular services never sent an `Authorization` header at all, which
+ * only went unnoticed because the legacy controllers had no `[Authorize]`
+ * attribute either.
  */
 export const httpClient = axios.create({
   baseURL: env.apiBaseUrl,
@@ -24,19 +23,24 @@ httpClient.interceptors.request.use((config) => {
   return config
 })
 
+/**
+ * Called when the API rejects the stored token. Assigned by the app shell so
+ * this module stays free of router and store imports (both of which import
+ * the client, directly or otherwise).
+ */
+let onUnauthorized: (() => void) | null = null
+
+export function setUnauthorizedHandler(handler: () => void): void {
+  onUnauthorized = handler
+}
+
 httpClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
       tokenStorage.clear()
-      if (window.location.pathname !== '/login') {
-        window.location.assign('/login')
-      }
+      onUnauthorized?.()
     }
     return Promise.reject(error)
   },
 )
-
-export const whatsappClient = axios.create({
-  baseURL: env.whatsappServiceUrl,
-})
