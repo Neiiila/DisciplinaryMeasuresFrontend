@@ -1,129 +1,90 @@
 import { httpClient } from '@/shared/api/httpClient'
 import { buildFormData } from '@/shared/lib/buildFormData'
-import { ROLES, type Role } from '@/shared/config/roles'
-import { toUserAccount } from '@/features/users/api/userMapper'
 import type {
-  AttachAccountInput,
+  AppNotification,
   CreateUserInput,
-  UpdateAccountInput,
-  UserAccount,
-  UserAccountDto,
+  OpenAccountInput,
+  UpdateUserInput,
+  User,
 } from '@/features/users/types'
 
+/**
+ * Every call the UI makes against `api/users`.
+ *
+ * Create and update are `multipart/form-data` because both actions accept an
+ * optional photo alongside the record; the rest are plain JSON. The nested
+ * `employment` object is flattened into `Employment.Field` keys, which is how
+ * ASP.NET model binding reconstructs a nested record from a form post.
+ */
 export const userRepository = {
-  async getAll(): Promise<UserAccount[]> {
-    const { data } = await httpClient.get<UserAccountDto[]>('/api/User')
-    return data.map(toUserAccount)
+  async getAll(): Promise<User[]> {
+    const { data } = await httpClient.get<User[]>('/api/users')
+    return data
   },
 
-  async getByBusinessUnit(businessUnit: string): Promise<UserAccount[]> {
-    const { data } = await httpClient.get<UserAccountDto[]>('/api/User/BU', { params: { bu: businessUnit } })
-    return data.map(toUserAccount)
+  async getById(id: string): Promise<User> {
+    const { data } = await httpClient.get<User>(`/api/users/${id}`)
+    return data
   },
 
-  async getForRole(role: Role, businessUnit: string | null): Promise<UserAccount[]> {
-    if (role === ROLES.SUPER_ADMIN || !businessUnit) {
-      return this.getAll()
-    }
-    return this.getByBusinessUnit(businessUnit)
+  async create(input: CreateUserInput, photo: File | null): Promise<User> {
+    const { data } = await httpClient.post<User>('/api/users', toUserFormData(input, photo))
+    return data
   },
 
-  async getById(id: string): Promise<UserAccount> {
-    const { data } = await httpClient.get<UserAccountDto>(`/api/User/${id}`)
-    return toUserAccount(data)
+  async update(id: string, input: UpdateUserInput, photo: File | null): Promise<User> {
+    const { data } = await httpClient.put<User>(`/api/users/${id}`, toUserFormData(input, photo))
+    return data
   },
 
-  async create(input: CreateUserInput): Promise<void> {
-    const { employee, account, photo, sendCredentials } = input
-    const formData = buildFormData(
-      {
-        Id: employee.id,
-        Cin: employee.cin,
-        Gender: employee.gender,
-        First_Name: employee.firstName,
-        Last_Name: employee.lastName,
-        Address: employee.address,
-        Tel: employee.phone,
-        Status: employee.status,
-        Position: employee.position,
-        Site: employee.site,
-        Department: employee.department,
-        Business_Unit: employee.businessUnit,
-        Segment: employee.segment,
-        Local_Job_Title: employee.localJobTitle,
-        Hiring_Date: employee.hiringDate,
-        Supervisor: employee.supervisor,
-        Email: account?.email ?? null,
-        Account_Status: account?.accountStatus ?? null,
-        Password: account?.password ?? null,
-        Role: account?.role ?? null,
-      },
-      { Photo: photo },
-    )
-    await httpClient.post(`/api/User?send=${sendCredentials}`, formData)
+  async changePassword(id: string, newPassword: string): Promise<void> {
+    await httpClient.put(`/api/users/${id}/password`, { newPassword })
   },
 
-  async update(id: string, input: { employee: UserAccount; photo: File | null }): Promise<void> {
-    const { employee, photo } = input
-    const formData = buildFormData(
-      {
-        Id: employee.id,
-        Cin: employee.cin,
-        Gender: employee.gender,
-        First_Name: employee.firstName,
-        Last_Name: employee.lastName,
-        Address: employee.address,
-        Tel: employee.phone,
-        Status: employee.status,
-        Position: employee.position,
-        Site: employee.site,
-        Department: employee.department,
-        Business_Unit: employee.businessUnit,
-        Segment: employee.segment,
-        Local_Job_Title: employee.localJobTitle,
-        Hiring_Date: employee.hiringDate,
-        Supervisor: employee.supervisor,
-      },
-      { Photo: photo },
-    )
-    await httpClient.put(`/api/User/${id}`, formData)
+  /** Opens a sign-in account on an employee record that has none. */
+  async openAccount(id: string, input: OpenAccountInput): Promise<User> {
+    const { data } = await httpClient.post<User>(`/api/users/${id}/account`, input)
+    return data
   },
 
-  async updateAccount(id: string, input: UpdateAccountInput): Promise<void> {
-    await httpClient.put(`/api/User/updateAccount/${id}`, {
-      email: input.email,
-      account_Status: input.accountStatus,
-      password: input.password,
-      role: input.role,
-      send: input.sendCredentials,
-    })
+  /** Activates a pending account so the user can sign in. */
+  async activate(id: string): Promise<void> {
+    await httpClient.post(`/api/users/${id}/activation`)
   },
 
-  async attachAccount(input: AttachAccountInput): Promise<void> {
-    await httpClient.put(`/api/User/addAccount/${input.employeeId}?send=${input.sendCredentials}`, {
-      email: input.email,
-      account_Status: input.accountStatus,
-      password: input.password,
-      role: input.role,
-    })
+  /** Withdraws sign-in rights while keeping the employee record. */
+  async revokeAccount(id: string): Promise<void> {
+    await httpClient.delete(`/api/users/${id}/account`)
   },
 
-  async delete(id: string): Promise<void> {
-    await httpClient.delete(`/api/User/${id}`)
+  /** Hides the user from listings; the row is retained for audit. */
+  async softDelete(id: string): Promise<void> {
+    await httpClient.delete(`/api/users/${id}`)
   },
 
-  /** Soft-remove: deactivates the account without deleting the employee record. */
-  async softRemove(id: string): Promise<void> {
-    await httpClient.delete(`/api/User/removeUser/${id}`)
+  async getMyNotifications(): Promise<AppNotification[]> {
+    const { data } = await httpClient.get<AppNotification[]>('/api/users/me/notifications')
+    return data
   },
+}
 
-  async verifyAccount(id: string): Promise<void> {
-    await httpClient.post(`/api/User/verifyAccount/${id}`)
-  },
+function toUserFormData(input: CreateUserInput | UpdateUserInput, photo: File | null): FormData {
+  const { employment, ...rest } = input
 
-  async createMany(users: CreateUserInput[]): Promise<void> {
-    for (const user of users) {
-      await this.create(user)
-    }
-  },
+  return buildFormData(
+    {
+      ...rest,
+      'Employment.HiringDate': employment.hiringDate,
+      'Employment.Status': employment.status,
+      'Employment.ContractType': employment.contractType,
+      'Employment.Position': employment.position,
+      'Employment.LocalJobTitle': employment.localJobTitle,
+      'Employment.SiteCode': employment.siteCode,
+      'Employment.Site': employment.site,
+      'Employment.Department': employment.department,
+      'Employment.BusinessUnit': employment.businessUnit,
+      'Employment.Segment': employment.segment,
+    },
+    { photo },
+  )
 }

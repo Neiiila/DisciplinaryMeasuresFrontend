@@ -1,40 +1,24 @@
 import { httpClient } from '@/shared/api/httpClient'
-import { ROLES, type Role } from '@/shared/config/roles'
-import { toEmployee } from '@/features/employees/api/employeeMapper'
-import type { Employee, EmployeeDto } from '@/features/employees/types'
+import type { ArabicProfile, UserSummary } from '@/features/users/types'
 
+/**
+ * The employee directory is read-only and unscoped: any authenticated user
+ * may list employees, which is what the request form's picker needs.
+ *
+ * Note there is no business-unit filtering here. The legacy API exposed
+ * `/api/Employee/BU?bu=...` and the client chose between it and the unscoped
+ * list based on the caller's role; the current backend has no such endpoint
+ * and no business-unit claim on the token, so that branch is gone.
+ */
 export const employeeRepository = {
-  async getAll(): Promise<Employee[]> {
-    const { data } = await httpClient.get<EmployeeDto[]>('/api/Employee')
-    return data.map(toEmployee)
+  async getAll(): Promise<UserSummary[]> {
+    const { data } = await httpClient.get<UserSummary[]>('/api/employees')
+    return data
   },
 
-  async getByBusinessUnit(businessUnit: string): Promise<Employee[]> {
-    const { data } = await httpClient.get<EmployeeDto[]>('/api/Employee/BU', { params: { bu: businessUnit } })
-    return data.map(toEmployee)
-  },
-
-  /** Superadmins see every employee; admins are scoped to their business unit. */
-  async getForRole(role: Role, businessUnit: string | null): Promise<Employee[]> {
-    if (role === ROLES.SUPER_ADMIN || !businessUnit) {
-      return this.getAll()
-    }
-    return this.getByBusinessUnit(businessUnit)
-  },
-
-  async getById(id: string): Promise<Employee> {
-    const { data } = await httpClient.get<EmployeeDto>(`/api/User/${id}`)
-    return toEmployee(data)
-  },
-
-  async remove(id: string): Promise<void> {
-    await httpClient.delete(`/api/User/${id}`)
-  },
-
-  async getWithStatistics(employeeId: string): Promise<unknown> {
-    const { data } = await httpClient.get('/api/Employee/GetEmployeeWithStatistics', {
-      params: { userId: employeeId },
-    })
+  /** Creates or replaces an employee's Arabic-script profile. Administrators only. */
+  async setArabicProfile(id: string, profile: ArabicProfile): Promise<ArabicProfile> {
+    const { data } = await httpClient.put<ArabicProfile>(`/api/employees/${id}/arabic-profile`, profile)
     return data
   },
 }

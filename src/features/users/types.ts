@@ -1,44 +1,102 @@
-import type { Employee, EmployeeDto } from '@/features/employees/types'
+import type { AccountStatus, Role } from '@/shared/config/roles'
 
-export const ACCOUNT_STATUSES = ['Active', 'Inactive', 'Blocked', 'Deleted'] as const
-export type AccountStatus = (typeof ACCOUNT_STATUSES)[number]
+/**
+ * These mirror the API contracts one-for-one (`UserResponse`,
+ * `CreateUserRequest`, ...). The backend serialises with .NET's default
+ * camelCase policy, so no field renaming is needed — unlike the legacy API,
+ * whose `first_Name`/`business_Unit` spellings had to be mapped.
+ */
 
-/** A user account is an employee record augmented with login/account fields. */
-export interface UserAccount extends Employee {
-  accountStatus: AccountStatus
-  role: string
+/** HR attributes, nested under `employment` on every user payload. */
+export interface Employment {
+  hiringDate: string | null
+  status: string | null
+  contractType: string | null
+  position: string | null
+  localJobTitle: string | null
+  siteCode: string | null
+  site: string | null
+  department: string | null
+  businessUnit: string | null
+  segment: string | null
 }
 
-export interface UserAccountDto extends EmployeeDto {
-  account_Status: AccountStatus
-  role: string
+export interface ArabicProfile {
+  firstName: string | null
+  lastName: string | null
+  address: string | null
+}
+
+export interface User {
+  id: string
+  firstName: string
+  lastName: string
+  fullName: string
+  cin: string | null
+  email: string | null
+  address: string | null
+  phoneNumber: string | null
+  gender: string | null
+  photoPath: string | null
+  employment: Employment
+  accountStatus: AccountStatus
+  role: Role
+  supervisorId: string | null
+  supervisorName: string | null
+  hasAccount: boolean
+  createdOn: string
+  arabicProfile: ArabicProfile | null
+}
+
+/** Trimmed projection returned by the employee directory, for pickers and lists. */
+export interface UserSummary {
+  id: string
+  fullName: string
+  email: string | null
+  position: string | null
+  department: string | null
+  photoPath: string | null
 }
 
 export interface CreateUserInput {
-  employee: Employee
-  account: {
-    email: string
-    accountStatus: AccountStatus
-    password: string
-    role: string
-  } | null
-  photo: File | null
-  sendCredentials: boolean
+  id: string
+  firstName: string
+  lastName: string
+  cin: string | null
+  email: string | null
+  password: string | null
+  address: string | null
+  phoneNumber: string | null
+  gender: string | null
+  supervisorId: string | null
+  role: Role
+  employment: Employment
 }
 
-export interface UpdateAccountInput {
+export type UpdateUserInput = Omit<CreateUserInput, 'id' | 'password'>
+
+export interface OpenAccountInput {
   email: string
-  accountStatus: AccountStatus
   password: string
-  role: string
-  sendCredentials: boolean
+  role: Role
 }
 
-export interface AttachAccountInput {
-  employeeId: string
-  email: string
-  accountStatus: AccountStatus
-  password: string
-  role: string
-  sendCredentials: boolean
+export const EMPTY_EMPLOYMENT: Employment = {
+  hiringDate: null,
+  status: null,
+  contractType: null,
+  position: null,
+  localJobTitle: null,
+  siteCode: null,
+  site: null,
+  department: null,
+  businessUnit: null,
+  segment: null,
+}
+
+export interface AppNotification {
+  id: number
+  message: string
+  raisedOn: string
+  isRead: boolean
 }
