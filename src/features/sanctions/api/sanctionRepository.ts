@@ -1,166 +1,82 @@
-import { httpClient, whatsappClient } from '@/shared/api/httpClient'
+import { httpClient } from '@/shared/api/httpClient'
 import { buildFormData } from '@/shared/lib/buildFormData'
-import { ROLES, type Role } from '@/shared/config/roles'
-import type { Decision, Fault, Meeting, SanctionRequest } from '@/features/sanctions/types'
+import type { ValidationDecision } from '@/shared/config/roles'
+import type {
+  Fault,
+  RaiseSanctionRequestInput,
+  SanctionRequestDetail,
+  SanctionRequestSummary,
+} from '@/features/sanctions/types'
 
 /**
- * The legacy Angular services relied on `any` for every one of these
- * payloads, so the shapes below are reverse-engineered from how the
- * components consumed them rather than from a formal API contract. Treat
- * this file as the single place to correct field names once the real
- * backend schema is confirmed.
+ * The sanction request workflow.
+ *
+ * Two things the API decides for us, so the client never sends them: the
+ * requester is taken from the token (a caller cannot raise a request in
+ * someone else's name), and so is the validator when recording a decision.
  */
 export const sanctionRepository = {
+  /** Every request in the system. Administrators only. */
+  async getAll(): Promise<SanctionRequestSummary[]> {
+    const { data } = await httpClient.get<SanctionRequestSummary[]>('/api/sanction-requests')
+    return data
+  },
+
+  async getById(id: number): Promise<SanctionRequestDetail> {
+    const { data } = await httpClient.get<SanctionRequestDetail>(`/api/sanction-requests/${id}`)
+    return data
+  },
+
+  /** Requests the caller has raised. */
+  async getMine(): Promise<SanctionRequestSummary[]> {
+    const { data } = await httpClient.get<SanctionRequestSummary[]>('/api/sanction-requests/mine')
+    return data
+  },
+
+  /** Requests awaiting the caller, plus those they have already answered. */
+  async getAddressedToMe(): Promise<SanctionRequestSummary[]> {
+    const { data } = await httpClient.get<SanctionRequestSummary[]>('/api/sanction-requests/addressed-to-me')
+    return data
+  },
+
+  async raise(input: RaiseSanctionRequestInput): Promise<SanctionRequestDetail> {
+    const formData = buildFormData(
+      {
+        description: input.description,
+        details: input.details,
+        employeeId: input.employeeId,
+        faultId: input.faultId,
+        'ProposedFault.Title': input.proposedFault?.title ?? null,
+        'ProposedFault.Category': input.proposedFault?.category ?? null,
+      },
+      { attachment: input.attachment },
+    )
+
+    const { data } = await httpClient.post<SanctionRequestDetail>('/api/sanction-requests', formData)
+    return data
+  },
+
+  /** Records the caller's answer on a request awaiting them. */
+  async recordDecision(
+    id: number,
+    decision: ValidationDecision,
+    note: string | null,
+  ): Promise<SanctionRequestDetail> {
+    const { data } = await httpClient.post<SanctionRequestDetail>(
+      `/api/sanction-requests/${id}/decisions`,
+      { decision, note },
+    )
+    return data
+  },
+
+  /** Cancels a request. Only its requester may do so. */
+  async cancel(id: number): Promise<void> {
+    await httpClient.post(`/api/sanction-requests/${id}/cancellation`)
+  },
+
+  /** The validated fault catalogue, for the request form's picker. */
   async getFaults(): Promise<Fault[]> {
-    const { data } = await httpClient.get<Fault[]>('/faults')
+    const { data } = await httpClient.get<Fault[]>('/api/faults')
     return data
-  },
-
-  async getAll(): Promise<SanctionRequest[]> {
-    const { data } = await httpClient.get<SanctionRequest[]>('/api/SanctionRequests')
-    return data
-  },
-
-  async getByBusinessUnit(businessUnit: string): Promise<SanctionRequest[]> {
-    const { data } = await httpClient.get<SanctionRequest[]>('/api/SanctionRequests/BU', {
-      params: { bu: businessUnit },
-    })
-    return data
-  },
-
-  async getForRole(role: Role, businessUnit: string | null): Promise<SanctionRequest[]> {
-    if (role === ROLES.SUPER_ADMIN || !businessUnit) return this.getAll()
-    return this.getByBusinessUnit(businessUnit)
-  },
-
-  async getById(id: number): Promise<SanctionRequest> {
-    const { data } = await httpClient.get<SanctionRequest>(`/api/SanctionRequests/${id}`)
-    return data
-  },
-
-  async getMyRequests(userId: string): Promise<SanctionRequest[]> {
-    const { data } = await httpClient.get<SanctionRequest[]>('/usersRequests', { params: { userId } })
-    return data
-  },
-
-  async getReceivedRequests(userId: string): Promise<SanctionRequest[]> {
-    const { data } = await httpClient.get<SanctionRequest[]>('/GetRecievedRequests', { params: { userId } })
-    return data
-  },
-
-  async getPreparedRequests(): Promise<SanctionRequest[]> {
-    const { data } = await httpClient.get<SanctionRequest[]>('/GetPreparedRequests')
-    return data
-  },
-
-  async getPreparedRequestsByBusinessUnit(businessUnit: string): Promise<SanctionRequest[]> {
-    const { data } = await httpClient.get<SanctionRequest[]>('/GetPreparedRequests/BU', {
-      params: { bu: businessUnit },
-    })
-    return data
-  },
-
-  async getPreparedRequestsForRole(role: Role, businessUnit: string | null): Promise<SanctionRequest[]> {
-    if (role === ROLES.SUPER_ADMIN || !businessUnit) return this.getPreparedRequests()
-    return this.getPreparedRequestsByBusinessUnit(businessUnit)
-  },
-
-  async create(input: {
-    employeeId: string
-    requesterId: string
-    fault: Fault
-    isNewFault: boolean
-    description: string
-    requestDate: string
-    details: string
-    files: File[]
-  }): Promise<void> {
-    const formData = buildFormData(
-      {
-        EmployeeId: input.employeeId,
-        RequesterId: input.requesterId,
-        Description: input.description,
-        Request_Date: input.requestDate,
-        Details: input.details,
-        ...(input.isNewFault
-          ? {
-              'Fault.Title': input.fault.title,
-              'Fault.TitleAr': input.fault.titleAr,
-              'Fault.Type': input.fault.type ?? '',
-              'Fault.IsValidated': false,
-            }
-          : { FaultId: input.fault.id }),
-      },
-      { files: input.files },
-    )
-    await httpClient.post('/api/SanctionRequests', formData)
-  },
-
-  async respond(input: {
-    sanctionId: number
-    validatorId: string
-    status: boolean
-    note: string
-  }): Promise<void> {
-    await httpClient.post('/RequestStatuses', {
-      sanctionId: input.sanctionId,
-      validatorId: input.validatorId,
-      date: new Date().toISOString(),
-      status: input.status,
-      note: input.note,
-    })
-  },
-
-  async refuse(sanctionId: number): Promise<void> {
-    await httpClient.put('/refuseRequest', null, { params: { id: sanctionId } })
-  },
-
-  async getCurrentSanctions(userId: string): Promise<SanctionRequest[]> {
-    const { data } = await httpClient.get<SanctionRequest[]>('/GetCurrentSanctions', { params: { userId } })
-    return data
-  },
-
-  async addDecision(decision: Decision, send: boolean, file: File | null): Promise<void> {
-    const formData = buildFormData(
-      {
-        SanctionId: decision.sanctionId,
-        EmployeeNewStatus: decision.employeeNewStatus,
-        Decision_Date: decision.decisionDate,
-        send,
-      },
-      { file },
-    )
-    await httpClient.post('/postDecision', formData)
-  },
-
-  async addMeeting(sanctionId: number, meetingDate: string, send: boolean, file: File | null): Promise<void> {
-    const formData = buildFormData({ SanctionId: sanctionId, Meeting_Date: meetingDate, send }, { file })
-    await httpClient.post('/postMeeting', formData)
-  },
-
-  async getMeetings(): Promise<Meeting[]> {
-    const { data } = await httpClient.get<Meeting[]>('/meetings')
-    return data
-  },
-
-  async getMeetingsByBusinessUnit(businessUnit: string): Promise<Meeting[]> {
-    const { data } = await httpClient.get<Meeting[]>('/meetings/BU', { params: { bu: businessUnit } })
-    return data
-  },
-
-  async getMeetingsForRole(role: Role, businessUnit: string | null): Promise<Meeting[]> {
-    if (role === ROLES.SUPER_ADMIN || !businessUnit) return this.getMeetings()
-    return this.getMeetingsByBusinessUnit(businessUnit)
-  },
-
-  /**
-   * Sends a generated document through the optional WhatsApp messaging
-   * microservice. The legacy code hardcoded a personal test phone number
-   * here instead of taking the recipient as a parameter — that number is
-   * now supplied by the caller.
-   */
-  async sendViaWhatsapp(phoneNumber: string, message: string, file: File): Promise<void> {
-    const formData = buildFormData({ number: phoneNumber, message }, { file })
-    await whatsappClient.post('/send-message', formData)
   },
 }
