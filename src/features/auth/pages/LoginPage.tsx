@@ -1,17 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Button } from 'primereact/button'
-import { Password } from 'primereact/password'
 import { InputText } from 'primereact/inputtext'
+import { Password } from 'primereact/password'
 import { useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { Link, useNavigate } from 'react-router-dom'
+import { Controller, useForm } from 'react-hook-form'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { useAuthStore } from '@/features/auth/store/authStore'
-import { getErrorMessage } from '@/shared/api/getErrorMessage'
+import { toApiError } from '@/shared/api/apiError'
 import { env } from '@/shared/config/env'
 
 const schema = z.object({
-  identifier: z.string().min(1, 'Enter your email or employee id.'),
+  identifier: z.string().min(1, 'Enter your matriculation number or email.'),
   password: z.string().min(1, 'Enter your password.'),
 })
 
@@ -20,23 +20,31 @@ type FormValues = z.infer<typeof schema>
 export function LoginPage() {
   const login = useAuthStore((state) => state.login)
   const navigate = useNavigate()
+  const location = useLocation()
   const [serverError, setServerError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const {
+    control,
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<FormValues>({ resolver: zodResolver(schema) })
+  } = useForm<FormValues>({
+    resolver: zodResolver(schema),
+    defaultValues: { identifier: '', password: '' },
+  })
 
   async function onSubmit(values: FormValues) {
     setServerError(null)
     setIsSubmitting(true)
     try {
       await login(values)
-      navigate('/dashboard', { replace: true })
+      const from = (location.state as { from?: { pathname: string } } | null)?.from?.pathname
+      navigate(from ?? '/dashboard', { replace: true })
     } catch (error) {
-      setServerError(getErrorMessage(error, 'Invalid credentials.'))
+      // A 403 here means the account exists but is Pending or Revoked, which
+      // is worth saying plainly rather than as a generic failure.
+      setServerError(toApiError(error, 'Sign-in failed.').message)
     } finally {
       setIsSubmitting(false)
     }
@@ -50,23 +58,42 @@ export function LoginPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="auth-form">
           <div className="field">
-            <label htmlFor="identifier">Email or employee id</label>
-            <InputText id="identifier" {...register('identifier')} autoFocus />
-            {errors.identifier && <small className="field-error">{errors.identifier.message}</small>}
+            <label htmlFor="identifier">Matriculation number or email</label>
+            <InputText id="identifier" autoFocus {...register('identifier')} />
+            {errors.identifier && (
+              <small className="field-error" role="alert">
+                {errors.identifier.message}
+              </small>
+            )}
           </div>
 
           <div className="field">
             <label htmlFor="password">Password</label>
-            <Password
-              inputId="password"
-              feedback={false}
-              toggleMask
-              {...register('password')}
+            <Controller
+              name="password"
+              control={control}
+              render={({ field }) => (
+                <Password
+                  inputId="password"
+                  value={field.value}
+                  onChange={(e) => field.onChange(e.target.value)}
+                  feedback={false}
+                  toggleMask
+                />
+              )}
             />
-            {errors.password && <small className="field-error">{errors.password.message}</small>}
+            {errors.password && (
+              <small className="field-error" role="alert">
+                {errors.password.message}
+              </small>
+            )}
           </div>
 
-          {serverError && <div className="field-error server-error">{serverError}</div>}
+          {serverError && (
+            <div className="field-error server-error" role="alert">
+              {serverError}
+            </div>
+          )}
 
           <Button type="submit" label="Sign in" loading={isSubmitting} className="w-full" />
         </form>
